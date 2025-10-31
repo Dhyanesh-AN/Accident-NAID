@@ -19,9 +19,21 @@ class Base3DModel(nn.Module):
         if pretrained_path:
             checkpoint = torch.load(pretrained_path, map_location='cpu')
             state_dict = checkpoint.get('state_dict', checkpoint)
-            filtered = {k: v for k, v in state_dict.items() if 'fc' not in k and 'classifier' not in k}
-            self.load_state_dict(filtered, strict=False)
-            print(f"✅ Loaded pretrained weights (except classifier) from {pretrained_path}")
+        
+            # Handle first conv layer
+            conv1_weight = state_dict['conv1.weight']  # shape: [64, 3, 7, 7, 7]
+            # Average across channel dimension to make it compatible with 1 input channel
+            conv1_weight_gray = conv1_weight.mean(dim=1, keepdim=True)  # shape: [64, 1, 7, 7, 7]
+            state_dict['conv1.weight'] = conv1_weight_gray
+        
+            # Remove classifier weights if shapes mismatch
+            filtered = {k: v for k, v in state_dict.items() if not k.startswith('fc')}
+            missing, unexpected = model.load_state_dict(filtered, strict=False)
+            print(f"✅ Loaded pretrained weights from {pretrained_path}")
+            if missing:
+                print(f"Missing keys: {missing}")
+            if unexpected:
+                print(f"Unexpected keys: {unexpected}")
             
 
 def get_inplanes():
